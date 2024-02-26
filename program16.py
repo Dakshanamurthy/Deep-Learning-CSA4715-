@@ -1,0 +1,32 @@
+import cv2
+import numpy as np
+from google.colab.patches import cv2_imshow
+
+image = cv2.imread('/content/images.jpeg')
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+blur = cv2.GaussianBlur(gray, (5, 5), 0)
+_, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+kernel = np.ones((3, 3), np.uint8)
+opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+sure_bg = cv2.dilate(opening, kernel, iterations=3)
+dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
+_, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+sure_fg = np.uint8(sure_fg)
+unknown = cv2.subtract(sure_bg, sure_fg)
+_, markers = cv2.connectedComponents(sure_fg)
+markers = markers + 1
+markers[unknown == 255] = 0
+markers = cv2.watershed(image, markers)
+image[markers == -1] = [255, 0, 0]
+cv2_imshow(image)
+
+ground_truth_segmentation = cv2.imread('/content/images.jpeg', 0)
+
+# Error handling
+if markers is not None and ground_truth_segmentation is not None:
+    intersection = np.logical_and(markers, ground_truth_segmentation)
+    union = np.logical_or(markers, ground_truth_segmentation)
+    iou_score = np.sum(intersection) / np.sum(union)
+    print("Intersection over Union (IoU) score:", iou_score)
+else:
+    print("Error: One or both images could not be loaded properly")
